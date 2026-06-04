@@ -46,20 +46,35 @@ def save_persistent_data(data):
     with open(DB_FILE, "wb") as f:
         pickle.dump(data, f)
 
-# --- アイコン画像のBase64エンコード ---
-icon_path = r"C:\Users\meime\OneDrive\デスクトップ\vsm_icon.jpg"
+# ==========================================
+# ⚙️ アプリケーション設定 & アイコン読み込み
+# ==========================================
+# 実行中のスクリプト（app.py）と同じディレクトリの絶対パスを取得
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 同じディレクトリ内にあるアイコン画像のパスを作成
+icon_path = os.path.join(current_dir, "vsm_icon.jpg")
 
 try:
+    # 1. カスタムヘッダーUI用のBase64エンコード
     with open(icon_path, "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode()
     img_html = f'<img src="data:image/jpeg;base64,{encoded_string}" height="45" style="margin-right:12px; border-radius:8px; vertical-align:middle; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">'
+    
+    # 2. ページタブ用のPIL Image読み込み
     page_icon = Image.open(icon_path)
+
 except FileNotFoundError:
+    # 画像が見つからなかった場合のフォールバック（絵文字）
     img_html = '<span style="font-size:35px; margin-right:12px; vertical-align:middle;">🧲</span>'
     page_icon = "🧲"
 
 # --- ページ設定 ---
-st.set_page_config(page_title="VSM", page_icon=page_icon, layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(
+    page_title="VSM Plotter", 
+    page_icon=page_icon, 
+    layout="wide", 
+    initial_sidebar_state="expanded"
+)
 
 # --- 💅 カスタムCSS (ピンクベースUI ＆ インスタ風カードスタイル) ---
 st.markdown("""
@@ -169,14 +184,12 @@ def calc_diamagnetic_slope(H_data, M_data, H_min, H_max):
     elif np.sum(neg_mask) > 1: return slope_neg
     return 0.0
 
-# ★ 新規追加: M軸の上下非対称ズレを計算する関数
 def calc_m_offset(H_data, M_data, H_min, H_max):
     H = np.array(H_data)
     M = np.array(M_data)
     pos_mask = (H >= H_min) & (H <= H_max)
     neg_mask = (H >= -H_max) & (H <= -H_min)
     if np.sum(pos_mask) > 1 and np.sum(neg_mask) > 1:
-        # 正負両方の高磁場領域での平均値の中点をオフセットとする
         return (np.mean(M[pos_mask]) + np.mean(M[neg_mask])) / 2.0
     return 0.0
 
@@ -276,7 +289,7 @@ with st.sidebar:
         with col_s: start = st.number_input("Start(T)", value=1.3, step=0.1)
         with col_f: finish = st.number_input("Finish(T)", value=1.6, step=0.1)
         do_shift_correction = st.checkbox("H軸ズレ自動補正(左右対称)", value=True)
-        do_m_shift_correction = st.checkbox("M軸ズレ自動補正(上下対称)", value=True) # ★追加
+        do_m_shift_correction = st.checkbox("M軸ズレ自動補正(上下対称)", value=True) 
         do_bg_correction = st.checkbox("反磁性成分を引く", value=True)
         N_factor = st.number_input("反磁界係数 N", value=1.0, step=0.1)
         do_demag_correction = st.checkbox("反磁界補正", value=False)
@@ -398,7 +411,7 @@ with tab1:
                 H_bwd_fit = np.array(H_bwd_fit) if H_bwd_fit else np.array([])
                 M_bwd_fit = np.array(M_bwd_fit) if M_bwd_fit else np.array([])
                 
-                s_shift, slope, m_offset = 0.0, 0.0, 0.0 # ★追加
+                s_shift, slope, m_offset = 0.0, 0.0, 0.0
                 
                 if do_shift_correction and len(H_fwd_fit) > 10 and len(H_bwd_fit) > 10:
                     s_shift = optimize_H_shift_symmetric_split(H_fwd_fit, M_fwd_fit, H_bwd_fit, M_bwd_fit, start, finish)
@@ -413,7 +426,6 @@ with tab1:
                 if do_bg_correction and len(H_shifted_all) > 10:
                     slope = calc_diamagnetic_slope(H_shifted_all, M_all, start, finish)
                     
-                # ★追加: M軸の上下オフセットを計算
                 if do_m_shift_correction and len(H_shifted_all) > 10:
                     m_offset = calc_m_offset(H_shifted_all, M_all, start, finish)
                 
@@ -434,7 +446,6 @@ with tab1:
                         
                         h_shift = hr - s_shift if "Forward" in label else hr + s_shift
                         
-                        # ★追加: M軸の縦ズレ補正を適用
                         m_vert_corrected = mr - m_offset
                         m_bg = m_vert_corrected - (h_shift * slope) if do_bg_correction else m_vert_corrected
                         h_final = h_shift - (N_factor * m_bg) if do_demag_correction else h_shift
@@ -456,7 +467,6 @@ with tab1:
                 line_color = distinct_colors[i % len(distinct_colors)]
                 fig_preview.add_trace(go.Scatter(x=plot_x, y=plot_y, name=name_label, mode='lines+markers', line=dict(width=2.5, color=line_color), connectgaps=False, marker=dict(size=4, color=line_color)))
                 
-                # ★追加: サマリー用に ΔM を保存
                 current_batch_results.append({"Sample": name_label, "Ms [kA/m]": Ms, "ΔH [T]": s_shift, "ΔM [kA/m]": m_offset, "Slope": slope})
                 current_batch_data[name_label] = {"plot_x": plot_x, "plot_y": plot_y, "clean_x": clean_x, "clean_y": clean_y, "color": line_color, "Info": {"Ms [kA/m]": Ms, "ΔH [T]": s_shift, "ΔM [kA/m]": m_offset, "Slope": slope}, "favorite": False}
 
@@ -543,7 +553,7 @@ with tab2:
                 df_comp = pd.DataFrame(compare_results)
                 display_cols = ["Sample", "Ms [kA/m]"]
                 if "ΔH [T]" in df_comp.columns: display_cols.append("ΔH [T]")
-                if "ΔM [kA/m]" in df_comp.columns: display_cols.append("ΔM [kA/m]") # ★追加
+                if "ΔM [kA/m]" in df_comp.columns: display_cols.append("ΔM [kA/m]")
                 if "Slope" in df_comp.columns: display_cols.append("Slope")
                 
                 st.dataframe(df_comp[display_cols].style.format({"Ms [kA/m]": "{:.2f}", "ΔH [T]": "{:.5f}", "ΔM [kA/m]": "{:.2f}", "Slope": "{:.4e}"}), use_container_width=True)
