@@ -16,9 +16,7 @@ def load_persistent_data():
         try:
             with open(DB_FILE, "rb") as f:
                 data = pickle.load(f)
-                # 過去のデータ構造との互換性を保つための自動クリーニング
                 if "samples" not in data:
-                    # 古いファイル構造（サンプルデータが直下にある場合）を新しい構造へコンバート
                     if any("clean_x" in v or "H_plot" in v for v in data.values() if isinstance(v, dict)):
                         cleaned_samples = {}
                         for k, v in data.items():
@@ -50,6 +48,7 @@ def save_persistent_data(data):
 
 # --- アイコン画像のBase64エンコード ---
 icon_path = r"C:\Users\meime\OneDrive\デスクトップ\vsm_icon.jpg"
+
 try:
     with open(icon_path, "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode()
@@ -99,7 +98,6 @@ st.markdown("""
     .streamlit-expanderHeader { background-color: #FFF5F7; border-radius: 8px; color: #EE4F6F !important; font-weight: bold; padding: 6px 12px !important; }
     .top-bar-container { background-color: #FFFFFF; padding: 10px 15px; border-radius: 12px; border: 1px solid #FFE4E8; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(238, 79, 111, 0.05); }
     
-    /* インスタ風コレクションカードスタイル */
     .instagram-card {
         background-color: #FFFFFF;
         border: 1px solid #FFE4E8;
@@ -121,15 +119,13 @@ st.markdown("""
 
 st.markdown(f'<div class="custom-header"><div class="header-logo">{img_html}VSM</div></div>', unsafe_allow_html=True)
 
-# データの永続的な初期化
 if "db" not in st.session_state:
     st.session_state.db = load_persistent_data()
 
-# ナビゲーション等に使うトリガー変数
 if "load_collection" not in st.session_state:
     st.session_state.load_collection = None
 
-distinct_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
+distinct_colors = ['#000000', '#D62728', '#1F77B4', '#2CA02C', '#FF7F0E', '#9467BD']
 
 # --- 解析ロジック ---
 def split_multi_cycle_segments(H, M):
@@ -173,6 +169,17 @@ def calc_diamagnetic_slope(H_data, M_data, H_min, H_max):
     elif np.sum(neg_mask) > 1: return slope_neg
     return 0.0
 
+# ★ 新規追加: M軸の上下非対称ズレを計算する関数
+def calc_m_offset(H_data, M_data, H_min, H_max):
+    H = np.array(H_data)
+    M = np.array(M_data)
+    pos_mask = (H >= H_min) & (H <= H_max)
+    neg_mask = (H >= -H_max) & (H <= -H_min)
+    if np.sum(pos_mask) > 1 and np.sum(neg_mask) > 1:
+        # 正負両方の高磁場領域での平均値の中点をオフセットとする
+        return (np.mean(M[pos_mask]) + np.mean(M[neg_mask])) / 2.0
+    return 0.0
+
 def safe_interp(x_eval, x_data, y_data):
     sort_idx = np.argsort(x_data)
     return np.interp(x_eval, x_data[sort_idx], y_data[sort_idx], left=np.nan, right=np.nan)
@@ -198,7 +205,6 @@ def optimize_H_shift_symmetric_split(H_fwd, M_fwd, H_bwd, M_bwd, H_min_fit, H_ma
             if mse < min_mse: min_mse = mse; best_s = s
     return best_s
 
-# ★ 修正点：縦軸・横軸の H と M を美しい斜体（HTMLタグ <i>）に変更
 def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max, y_dtick):
     fig = go.Figure()
     title_fixed_size = 20
@@ -269,7 +275,8 @@ with st.sidebar:
         col_s, col_f = st.columns(2)
         with col_s: start = st.number_input("Start(T)", value=1.3, step=0.1)
         with col_f: finish = st.number_input("Finish(T)", value=1.6, step=0.1)
-        do_shift_correction = st.checkbox("H軸ズレ自動最適化(対称)", value=True)
+        do_shift_correction = st.checkbox("H軸ズレ自動補正(左右対称)", value=True)
+        do_m_shift_correction = st.checkbox("M軸ズレ自動補正(上下対称)", value=True) # ★追加
         do_bg_correction = st.checkbox("反磁性成分を引く", value=True)
         N_factor = st.number_input("反磁界係数 N", value=1.0, step=0.1)
         do_demag_correction = st.checkbox("反磁界補正", value=False)
@@ -319,11 +326,10 @@ with st.sidebar:
         y_dtick = st.number_input("Y 間隔", value=200.0, step=100.0, disabled=auto_y)
 
 # ==========================================
-# メインエリア: タブUI (コレクションタブを新設)
+# メインエリア: タブUI
 # ==========================================
 tab1, tab2, tab3 = st.tabs(["📂 データの読み込みと補正", "📈 保存データの重ね合わせ", "🎬 保存済みコレクション"])
 
-# もしコレクションギャラリーから「復元」が押されたら、自動でタブ2で選択状態にするロジック
 if st.session_state.load_collection is not None:
     saved_set = st.session_state.db["collections"][st.session_state.load_collection]
     default_select = saved_set["samples"]
@@ -392,7 +398,8 @@ with tab1:
                 H_bwd_fit = np.array(H_bwd_fit) if H_bwd_fit else np.array([])
                 M_bwd_fit = np.array(M_bwd_fit) if M_bwd_fit else np.array([])
                 
-                s_shift, slope = 0.0, 0.0
+                s_shift, slope, m_offset = 0.0, 0.0, 0.0 # ★追加
+                
                 if do_shift_correction and len(H_fwd_fit) > 10 and len(H_bwd_fit) > 10:
                     s_shift = optimize_H_shift_symmetric_split(H_fwd_fit, M_fwd_fit, H_bwd_fit, M_bwd_fit, start, finish)
                 
@@ -405,6 +412,10 @@ with tab1:
                 
                 if do_bg_correction and len(H_shifted_all) > 10:
                     slope = calc_diamagnetic_slope(H_shifted_all, M_all, start, finish)
+                    
+                # ★追加: M軸の上下オフセットを計算
+                if do_m_shift_correction and len(H_shifted_all) > 10:
+                    m_offset = calc_m_offset(H_shifted_all, M_all, start, finish)
                 
                 plot_x, plot_y = [], []
                 clean_x, clean_y = [], []
@@ -422,7 +433,10 @@ with tab1:
                                     break
                         
                         h_shift = hr - s_shift if "Forward" in label else hr + s_shift
-                        m_bg = mr - (h_shift * slope) if do_bg_correction else mr
+                        
+                        # ★追加: M軸の縦ズレ補正を適用
+                        m_vert_corrected = mr - m_offset
+                        m_bg = m_vert_corrected - (h_shift * slope) if do_bg_correction else m_vert_corrected
                         h_final = h_shift - (N_factor * m_bg) if do_demag_correction else h_shift
                         
                         if is_trimmed:
@@ -442,15 +456,16 @@ with tab1:
                 line_color = distinct_colors[i % len(distinct_colors)]
                 fig_preview.add_trace(go.Scatter(x=plot_x, y=plot_y, name=name_label, mode='lines+markers', line=dict(width=2.5, color=line_color), connectgaps=False, marker=dict(size=4, color=line_color)))
                 
-                current_batch_results.append({"Sample": name_label, "Ms [kA/m]": Ms, "ΔH [T]": s_shift, "Slope": slope})
-                current_batch_data[name_label] = {"plot_x": plot_x, "plot_y": plot_y, "clean_x": clean_x, "clean_y": clean_y, "color": line_color, "Info": {"Ms [kA/m]": Ms, "ΔH [T]": s_shift, "Slope": slope}, "favorite": False}
+                # ★追加: サマリー用に ΔM を保存
+                current_batch_results.append({"Sample": name_label, "Ms [kA/m]": Ms, "ΔH [T]": s_shift, "ΔM [kA/m]": m_offset, "Slope": slope})
+                current_batch_data[name_label] = {"plot_x": plot_x, "plot_y": plot_y, "clean_x": clean_x, "clean_y": clean_y, "color": line_color, "Info": {"Ms [kA/m]": Ms, "ΔH [T]": s_shift, "ΔM [kA/m]": m_offset, "Slope": slope}, "favorite": False}
 
         st.plotly_chart(fig_preview, use_container_width=True)
         
         st.markdown("### 📊 解析結果サマリー")
         if current_batch_results:
             df_batch = pd.DataFrame(current_batch_results)
-            st.dataframe(df_batch[["Sample", "Ms [kA/m]", "ΔH [T]", "Slope"]].style.format({"Ms [kA/m]": "{:.2f}", "ΔH [T]": "{:.5f}", "Slope": "{:.4e}"}), use_container_width=True)
+            st.dataframe(df_batch[["Sample", "Ms [kA/m]", "ΔH [T]", "ΔM [kA/m]", "Slope"]].style.format({"Ms [kA/m]": "{:.2f}", "ΔH [T]": "{:.5f}", "ΔM [kA/m]": "{:.2f}", "Slope": "{:.4e}"}), use_container_width=True)
             st.write("")
             if st.button("💖 いいね！ (データをストックして保存)", type="primary", use_container_width=True):
                 for k, v in current_batch_data.items():
@@ -470,7 +485,6 @@ with tab2:
         if show_fav_only:
             available_options = [n for n in available_options if st.session_state.db["samples"][n].get("favorite", False)]
         
-        # ギャラリーからの復元選択、または通常選択
         valid_defaults = [d for d in default_select if d in available_options]
         selected_samples = col_sel.multiselect("重ね描き・出力するデータを選択してください", options=available_options, default=valid_defaults, label_visibility="collapsed")
         
@@ -508,7 +522,6 @@ with tab2:
 
             st.plotly_chart(fig_compare, use_container_width=True)
             
-            # --- ★ 新設：インスタ風コレクション保存枠 ---
             st.write("")
             with st.expander("🎬 この重ね合わせグラフをコレクション（保存済み）に保存する", expanded=False):
                 col_cname, col_cbtn = st.columns([3, 1])
@@ -530,9 +543,10 @@ with tab2:
                 df_comp = pd.DataFrame(compare_results)
                 display_cols = ["Sample", "Ms [kA/m]"]
                 if "ΔH [T]" in df_comp.columns: display_cols.append("ΔH [T]")
+                if "ΔM [kA/m]" in df_comp.columns: display_cols.append("ΔM [kA/m]") # ★追加
                 if "Slope" in df_comp.columns: display_cols.append("Slope")
                 
-                st.dataframe(df_comp[display_cols].style.format({"Ms [kA/m]": "{:.2f}", "ΔH [T]": "{:.5f}", "Slope": "{:.4e}"}), use_container_width=True)
+                st.dataframe(df_comp[display_cols].style.format({"Ms [kA/m]": "{:.2f}", "ΔH [T]": "{:.5f}", "ΔM [kA/m]": "{:.2f}", "Slope": "{:.4e}"}), use_container_width=True)
                 
                 col_bottom_left, col_bottom_right = st.columns([3, 1])
                 with col_bottom_left:
@@ -544,7 +558,6 @@ with tab2:
                         csv = pd.concat(export_dfs, ignore_index=True).to_csv(index=False).encode('utf-8-sig')
                         st.download_button(label="📥 プロット用CSV 一括ダウンロード", data=csv, file_name="VSM_overlaid_data.csv", mime="text/csv", type="primary", use_container_width=True)
 
-# --- ★ 新設：保存済みコレクション（インスタ風フィード）タブ ---
 with tab3:
     if not st.session_state.db.get("collections"):
         st.info("📌 保存されたコレクションがありません。隣の『📈 保存データの重ね合わせ』タブから、お気に入りのグラフを名前を付けて保存してください。")
@@ -552,7 +565,6 @@ with tab3:
         st.markdown("### 🗂️ 保存済みアルバム一覧")
         st.caption("Instagramの保存済みコレクションのように、過去に作成したグラフの組み合わせをいつでも復元できます。")
         
-        # 3列のグリッド状にカードを並べる
         cols = st.columns(3)
         for idx, (c_name, c_data) in enumerate(st.session_state.db["collections"].items()):
             col_target = cols[idx % 3]
@@ -565,12 +577,10 @@ with tab3:
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 展開用の詳細をexpanderの中に
                 with st.expander("📝 含まれるサンプル一覧を確認", expanded=False):
                     for s in c_data["samples"]:
                         st.caption(f"• {s}")
                 
-                # 操作ボタン（カードの直下）
                 cb1, cb2 = st.columns(2)
                 if cb1.button("🔄 グラフを復元する", key=f"restore_{c_name}", type="primary", use_container_width=True):
                     st.session_state.load_collection = c_name
