@@ -221,8 +221,12 @@ def optimize_H_shift_symmetric_split(H_fwd, M_fwd, H_bwd, M_bwd, H_min_fit, H_ma
 def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max, y_dtick):
     fig = go.Figure()
     title_fixed_size = 20
+    
+    # 【エラー対策】目盛り間隔(dtick)が0やマイナスになるとPlotlyがクラッシュするため安全な値に上書き
+    safe_x_dtick = x_dtick if x_dtick > 0 else 0.1
+    safe_y_dtick = y_dtick if y_dtick > 0 else 100.0
+
     layout_args = dict(
-        xaxis_title="μ₀<i>H</i> [T]", yaxis_title="<i>M</i> [kA/m]",
         height=650, 
         template="simple_white", hovermode="closest",
         
@@ -232,21 +236,29 @@ def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max,
         ),
         
         xaxis=dict(
+            # 最新のPlotly仕様に合わせて title の書き方を変更
+            title=dict(text="μ₀<i>H</i> [T]", font=dict(size=title_fixed_size, color='black')),
             automargin=False,
-            titlefont=dict(size=title_fixed_size, color='black'), tickfont=dict(size=tick_s, color='black'), 
+            tickfont=dict(size=tick_s, color='black'), 
             mirror='allticks', ticks='inside', tickcolor='black', showline=True, linecolor='black', 
             linewidth=2.5, tickwidth=2.5, ticklen=8, color='black', 
-            range=[x_min, x_max] if not auto_x else None, tickmode='linear' if not auto_x else 'auto', 
-            tick0=0 if not auto_x else None, dtick=x_dtick if not auto_x else None,
+            range=[x_min, x_max] if not auto_x else None, 
+            tickmode='linear' if not auto_x else 'auto', 
+            tick0=0 if not auto_x else None, 
+            dtick=safe_x_dtick if not auto_x else None,
             zeroline=True, zerolinewidth=1.0, zerolinecolor='black'
         ),
         yaxis=dict(
+            # 最新のPlotly仕様に合わせて title の書き方を変更
+            title=dict(text="<i>M</i> [kA/m]", font=dict(size=title_fixed_size, color='black')),
             automargin=False,
-            titlefont=dict(size=title_fixed_size, color='black'), tickfont=dict(size=tick_s, color='black'), 
+            tickfont=dict(size=tick_s, color='black'), 
             mirror='allticks', ticks='inside', tickcolor='black', showline=True, linecolor='black', 
             linewidth=2.5, tickwidth=2.5, ticklen=8, color='black', 
-            range=[y_min, y_max] if not auto_y else None, tickmode='linear' if not auto_y else 'auto', 
-            tick0=0 if not auto_y else None, dtick=y_dtick if not auto_y else None,
+            range=[y_min, y_max] if not auto_y else None, 
+            tickmode='linear' if not auto_y else 'auto', 
+            tick0=0 if not auto_y else None, 
+            dtick=safe_y_dtick if not auto_y else None,
             zeroline=True, zerolinewidth=1.0, zerolinecolor='black'
         ),
         
@@ -258,7 +270,6 @@ def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max,
     )
     fig.update_layout(**layout_args)
     return fig
-
 def parse_trim_ranges(range_str):
     trim_list = []
     if range_str:
