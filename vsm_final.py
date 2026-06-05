@@ -49,22 +49,15 @@ def save_persistent_data(data):
 # ==========================================
 # ⚙️ アプリケーション設定 & アイコン読み込み
 # ==========================================
-# 実行中のスクリプト（app.py）と同じディレクトリの絶対パスを取得
 current_dir = os.path.dirname(os.path.abspath(__file__))
-# 同じディレクトリ内にあるアイコン画像のパスを作成
 icon_path = os.path.join(current_dir, "vsm_icon.jpg")
 
 try:
-    # 1. カスタムヘッダーUI用のBase64エンコード
     with open(icon_path, "rb") as image_file:
         encoded_string = base64.b64encode(image_file.read()).decode()
     img_html = f'<img src="data:image/jpeg;base64,{encoded_string}" height="45" style="margin-right:12px; border-radius:8px; vertical-align:middle; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">'
-    
-    # 2. ページタブ用のPIL Image読み込み
     page_icon = Image.open(icon_path)
-
 except FileNotFoundError:
-    # 画像が見つからなかった場合のフォールバック（絵文字）
     img_html = '<span style="font-size:35px; margin-right:12px; vertical-align:middle;">🧲</span>'
     page_icon = "🧲"
 
@@ -76,16 +69,13 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 💅 カスタムCSS (ピンクベースUI ＆ インスタ風カードスタイル) ---
+# --- 💅 カスタムCSS ---
 st.markdown("""
 <style>
     @import url('https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap');
     html, body, [class*="css"] { font-family: 'M PLUS Rounded 1c', sans-serif !important; }
-    
     .stApp { background-color: #FFFDFD; }
-    
     header[data-testid="stHeader"] { background: transparent !important; }
-    
     .custom-header {
         display: flex; justify-content: flex-start; align-items: center;
         padding: 15px 40px 15px 80px; 
@@ -94,7 +84,6 @@ st.markdown("""
         margin-left: -4rem; margin-right: -4rem; box-shadow: 0 2px 10px rgba(238, 79, 111, 0.05);
     }
     .header-logo { display: flex; align-items: center; font-size: 26px; font-weight: 700; color: #EE4F6F; letter-spacing: 1.5px; }
-    
     [data-testid="stSidebar"] { background-color: #FFFFFF; border-right: 2px solid #FFE4E8; padding-top: 10px; }
     div[data-baseweb="input"] > div, div[data-baseweb="select"] > div { border-radius: 8px !important; }
     div[data-baseweb="input"] > div:focus-within, div[data-baseweb="select"] > div:focus-within { border-color: #EE4F6F !important; }
@@ -103,30 +92,15 @@ st.markdown("""
     [data-testid="stFileUploadDropzone"] { background-color: #FFFFFF !important; border: 2px dashed #FFB6C1 !important; border-radius: 12px !important; padding: 15px !important; min-height: 60px !important; }
     [data-testid="stFileUploadDropzone"]:hover { background-color: #FFF5F7 !important; border-color: #EE4F6F !important; }
     [data-testid="stFileUploadDropzone"] svg { color: #EE4F6F !important; width: 25px !important; }
-    
     .stButton > button { background-color: #FFFFFF !important; color: #EE4F6F !important; border: 2px solid #FFB6C1 !important; border-radius: 20px !important; font-weight: bold !important; transition: all 0.2s; }
     .stButton > button:hover { background-color: #FFF5F7 !important; border-color: #EE4F6F !important; }
     .stButton > button[kind="primary"] { background-color: #EE4F6F !important; color: white !important; border: none !important; box-shadow: 0 4px 10px rgba(238, 79, 111, 0.2) !important; }
     .stButton > button[kind="primary"]:hover { background-color: #D8425F !important; box-shadow: 0 6px 15px rgba(238, 79, 111, 0.3) !important; transform: translateY(-2px); }
-    
     textarea { font-family: monospace !important; font-size: 13px !important; background-color: #FAFAFA !important; }
     .streamlit-expanderHeader { background-color: #FFF5F7; border-radius: 8px; color: #EE4F6F !important; font-weight: bold; padding: 6px 12px !important; }
     .top-bar-container { background-color: #FFFFFF; padding: 10px 15px; border-radius: 12px; border: 1px solid #FFE4E8; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(238, 79, 111, 0.05); }
-    
-    .instagram-card {
-        background-color: #FFFFFF;
-        border: 1px solid #FFE4E8;
-        border-radius: 16px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 12px rgba(238, 79, 111, 0.03);
-        transition: all 0.3s ease;
-    }
-    .instagram-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 20px rgba(238, 79, 111, 0.08);
-        border-color: #FFB6C1;
-    }
+    .instagram-card { background-color: #FFFFFF; border: 1px solid #FFE4E8; border-radius: 16px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(238, 79, 111, 0.03); transition: all 0.3s ease; }
+    .instagram-card:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(238, 79, 111, 0.08); border-color: #FFB6C1; }
     .card-title { font-size: 18px; font-weight: 700; color: #EE4F6F; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
     .card-meta { font-size: 13px; color: #888888; margin-bottom: 12px; }
 </style>
@@ -222,7 +196,7 @@ def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max,
     fig = go.Figure()
     title_fixed_size = 20
     
-    # 【エラー対策】目盛り間隔(dtick)が0やマイナスになるとPlotlyがクラッシュするため安全な値に上書き
+    # クラッシュ防止用の安全な目盛り間隔
     safe_x_dtick = x_dtick if x_dtick > 0 else 0.1
     safe_y_dtick = y_dtick if y_dtick > 0 else 100.0
 
@@ -236,7 +210,6 @@ def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max,
         ),
         
         xaxis=dict(
-            # 最新のPlotly仕様に合わせて title の書き方を変更
             title=dict(text="μ₀<i>H</i> [T]", font=dict(size=title_fixed_size, color='black')),
             automargin=False,
             tickfont=dict(size=tick_s, color='black'), 
@@ -249,7 +222,6 @@ def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max,
             zeroline=True, zerolinewidth=1.0, zerolinecolor='black'
         ),
         yaxis=dict(
-            # 最新のPlotly仕様に合わせて title の書き方を変更
             title=dict(text="<i>M</i> [kA/m]", font=dict(size=title_fixed_size, color='black')),
             automargin=False,
             tickfont=dict(size=tick_s, color='black'), 
@@ -270,6 +242,7 @@ def create_vsm_plot(tick_s, auto_x, x_min, x_max, x_dtick, auto_y, y_min, y_max,
     )
     fig.update_layout(**layout_args)
     return fig
+
 def parse_trim_ranges(range_str):
     trim_list = []
     if range_str:
@@ -481,7 +454,8 @@ with tab1:
                 current_batch_results.append({"Sample": name_label, "Ms [kA/m]": Ms, "ΔH [T]": s_shift, "ΔM [kA/m]": m_offset, "Slope": slope})
                 current_batch_data[name_label] = {"plot_x": plot_x, "plot_y": plot_y, "clean_x": clean_x, "clean_y": clean_y, "color": line_color, "Info": {"Ms [kA/m]": Ms, "ΔH [T]": s_shift, "ΔM [kA/m]": m_offset, "Slope": slope}, "favorite": False}
 
-        st.plotly_chart(fig_preview, use_container_width=True)
+        # ★ 修正ポイント：ID重複エラーを防ぐための key 追加
+        st.plotly_chart(fig_preview, use_container_width=True, key="preview_chart")
         
         st.markdown("### 📊 解析結果サマリー")
         if current_batch_results:
@@ -541,7 +515,8 @@ with tab2:
                 temp_df = pd.DataFrame({"Sample": display_name, "H_corrected [T]": data["clean_x"], "M_corrected [kA/m]": data["clean_y"]})
                 export_dfs.append(temp_df)
 
-            st.plotly_chart(fig_compare, use_container_width=True)
+            # ★ 修正ポイント：ID重複エラーを防ぐための key 追加
+            st.plotly_chart(fig_compare, use_container_width=True, key="compare_chart")
             
             st.write("")
             with st.expander("🎬 この重ね合わせグラフをコレクション（保存済み）に保存する", expanded=False):
